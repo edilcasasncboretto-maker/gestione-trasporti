@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Versione iniziale: accesso libero in lettura/scrittura per l'uso interno d'ufficio.
+    // Prima di condividere l'URL pubblicamente, valuta di aggiungere Firebase Authentication
+    // (es. accesso con email/password dell'ufficio) e sostituire "true" con "request.auth != null".
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
