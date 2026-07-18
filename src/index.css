@@ -1,0 +1,203 @@
+/*
+  Direzione visiva: un cruscotto operativo da officina/cantiere, non un sito marketing.
+  Palette ispirata a segnaletica industriale e cartografia stradale:
+  - asfalto scuro per le superfici di navigazione
+  - ambra (colore dei lampeggianti) come segnale di stato/allerta
+  - verde deposito per le conferme
+  Font: una grottesca condensata per i numeri (targhe, km, €), una sans neutra per il corpo.
+*/
+
+@font-face {
+  font-family: 'Inter';
+  src: local('Inter');
+}
+
+:root {
+  --asfalto-950: #14181d;
+  --asfalto-900: #1b2129;
+  --asfalto-800: #262e38;
+  --asfalto-700: #3a4553;
+  --nebbia-400: #8a94a3;
+  --nebbia-200: #d7dce2;
+  --nebbia-50: #f5f6f8;
+  --ambra-500: #f2a900;
+  --ambra-600: #d99400;
+  --verde-deposito: #2f8f5b;
+  --rosso-scadenza: #c9432f;
+  --bianco: #ffffff;
+
+  --font-display: 'Oswald', 'Arial Narrow', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --shadow-card: 0 1px 2px rgba(20, 24, 29, 0.06), 0 1px 0 rgba(20, 24, 29, 0.04);
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--nebbia-50);
+  color: var(--asfalto-950);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--asfalto-950);
+  margin: 0 0 12px;
+}
+
+h1 { font-size: 22px; }
+h2 { font-size: 16px; color: var(--asfalto-700); }
+
+.numero {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+a { color: inherit; }
+
+button {
+  font-family: var(--font-body);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-primario {
+  background: var(--asfalto-950);
+  color: var(--bianco);
+}
+.btn-primario:hover { background: var(--asfalto-800); }
+
+.btn-segnale {
+  background: var(--ambra-500);
+  color: var(--asfalto-950);
+}
+.btn-segnale:hover { background: var(--ambra-600); }
+
+.btn-secondario {
+  background: transparent;
+  border: 1px solid var(--nebbia-200);
+  color: var(--asfalto-800);
+}
+
+input, select, textarea {
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--nebbia-200);
+  border-radius: var(--radius-sm);
+  background: var(--bianco);
+  color: var(--asfalto-950);
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--ambra-500);
+  outline-offset: 1px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--asfalto-700);
+  margin-bottom: 4px;
+}
+
+.campo { margin-bottom: 16px; }
+
+.card {
+  background: var(--bianco);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--nebbia-200);
+  padding: 20px;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: var(--asfalto-950);
+  color: var(--nebbia-200);
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .logo {
+  font-family: var(--font-display);
+  color: var(--bianco);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  padding: 0 20px 20px;
+  border-bottom: 1px solid var(--asfalto-800);
+  margin-bottom: 12px;
+}
+.sidebar .logo .puntino { color: var(--ambra-500); }
+
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  text-decoration: none;
+  color: var(--nebbia-400);
+  font-size: 13px;
+  font-weight: 600;
+  border-left: 3px solid transparent;
+}
+.sidebar nav a.attivo {
+  color: var(--bianco);
+  background: var(--asfalto-900);
+  border-left-color: var(--ambra-500);
+}
+.sidebar nav a:hover { color: var(--bianco); }
+
+.main-content {
+  padding: 28px 32px;
+  max-width: 1200px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.badge-ok { background: #e5f3ec; color: var(--verde-deposito); }
+.badge-attenzione { background: #fdf1dc; color: var(--ambra-600); }
+.badge-scaduto { background: #fbe6e2; color: var(--rosso-scadenza); }
+
+.griglia-scadenze {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
