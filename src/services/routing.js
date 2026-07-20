@@ -30,12 +30,19 @@ export async function geocodifica(indirizzo) {
 // Calcola la distanza stradale (andata) in km tra due punti, profilo mezzo pesante.
 // mezzo opzionale: { portata_kg, cassone_altezza_m } per rispettare i limiti stradali.
 export async function distanzaStradaKm(partenza, arrivo, mezzo) {
+  const { km, durataMin, geometria } = await calcolaPercorsoConTappe([partenza, arrivo], mezzo)
+  return { km, durataMin, geometria }
+}
+
+// Come sopra, ma accetta un percorso con tappe intermedie (waypoint) inserite
+// manualmente dall'utente trascinandole sulla mappa, per correggere un percorso
+// che il calcolo automatico non stima bene per un mezzo pesante.
+// punti: [partenza, ...tappeIntermedie, arrivo], ognuno { lat, lng }
+export async function calcolaPercorsoConTappe(punti, mezzo) {
+  if (!punti || punti.length < 2) throw new Error('Servono almeno due punti per calcolare un percorso')
   const url = `${ORS_BASE}/v2/directions/driving-hgv/geojson`
   const body = {
-    coordinates: [
-      [partenza.lng, partenza.lat],
-      [arrivo.lng, arrivo.lat],
-    ],
+    coordinates: punti.map((p) => [p.lng, p.lat]),
   }
   if (mezzo) {
     body.options = {
