@@ -77,10 +77,26 @@ Dettagli campo per campo nei commenti di `src/services/firestore.js`.
 ## Cosa fa già questa v1
 
 - **Calendario** (`/calendario`): vista mensile/settimanale degli impegni del camion.
-- **Nuova consegna/ritiro** (`/nuova-consegna`): form che geocodifica
-  l'indirizzo, calcola i km stradali di andata dal deposito (profilo mezzo
-  pesante), mostra la mappa col tracciato e calcola il costo da addebitare
-  (km andata+ritorno × costo/km, arrotondato per eccesso a multipli di 5 €).
+  Aprendo un impegno puoi **modificarlo** o **eliminarlo**. In cima alla pagina e
+  nel dettaglio di ogni impegno vedi anche eventuali **divieti di transito** attivi
+  quel giorno.
+- **Nuova consegna/ritiro** (`/nuova-consegna`, e `/modifica-consegna/:id` per
+  modificare un impegno esistente): form che geocodifica l'indirizzo, calcola i
+  km stradali di andata dal deposito (profilo mezzo pesante), mostra la mappa
+  col tracciato e calcola il costo da addebitare (km andata+ritorno × costo/km,
+  arrotondato per eccesso a multipli di 5 €). Puoi selezionare un cliente già
+  salvato in anagrafica per compilare automaticamente nome e indirizzo.
+  **Il percorso sulla mappa è modificabile a mano**: clicca per aggiungere un
+  punto di passaggio, trascinalo per spostarlo, click destro per rimuoverlo,
+  poi premi "Ricalcola" per aggiornare km e costo — utile quando il calcolo
+  automatico non stima bene una strada percorribile dal camion.
+- **Clienti** (`/clienti`): anagrafica clienti (nome, indirizzo, referente,
+  telefono, note) da richiamare direttamente in fase di inserimento consegna.
+- **Divieti mezzi pesanti** (`/restrizioni`): qui inserisci manualmente i
+  divieti di transito che conosci (zona, giorni della settimana, orario,
+  soglia in quintali) — compaiono poi come avviso nel calendario. Non esiste
+  una fonte dati unica e affidabile per tutti i divieti comunali in Italia,
+  quindi vanno tenuti aggiornati a mano quando cambia un'ordinanza.
 - **Mezzo e scadenze** (`/scadenze`): anagrafica del camion (portata, misure
   cassone) e le 4 scadenze richieste con relativo costo; badge di stato
   (verde/ambra/rosso) in base a quanti giorni mancano.
