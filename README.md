@@ -23,12 +23,25 @@ giornaliero su più consegne/ritiri in base a peso e volume della merce.
 4. Nel menu laterale vai su **Build → Firestore Database → Crea database** (modalità produzione, region europea es. `eur3`).
 5. In **Regole**, incolla il contenuto del file `firestore.rules` di questo progetto (accesso libero iniziale, pensato per uso interno d'ufficio — puoi aggiungere l'autenticazione in un secondo momento).
 
-## 2. Ottieni la API key gratuita di OpenRouteService
+## 2. Crea l'account gratuito Cloudinary (per caricare libretto, bollo, assicurazione)
+
+Cloudinary è un servizio di archiviazione file con un piano gratuito ampio
+(25 crediti/mese, più che sufficiente per pochi documenti) e **non richiede
+carta di credito**.
+
+1. Registrati su https://cloudinary.com/users/register/free
+2. Una volta dentro, nella Dashboard trovi in alto il tuo **Cloud name** — copialo, ti serve nel passo 4.
+3. Vai su **Settings** (icona ingranaggio) → scheda **Upload** → sezione "Upload presets" → **Add upload preset**.
+   - Imposta **Signing Mode** su **Unsigned** (fondamentale: permette il caricamento diretto dal browser senza bisogno di un server).
+   - Puoi lasciare tutto il resto di default, oppure impostare una cartella base tipo `gestione-trasporti`.
+   - Salva e copia il **nome del preset** che ti viene assegnato (o quello che hai scelto tu) — ti serve nel passo 4.
+
+## 3. Ottieni la API key gratuita di OpenRouteService
 
 1. Registrati su https://openrouteservice.org/dev/#/signup
 2. Crea una API key gratuita (piano "free", limiti ampi per uso da ufficio singolo).
 
-## 3. Configura le variabili d'ambiente
+## 4. Configura le variabili d'ambiente
 
 Copia `.env.example` in `.env` e compila tutti i valori (config Firebase, API
 key ORS, indirizzo del tuo deposito/magazzino — è il punto di partenza/arrivo
@@ -38,14 +51,14 @@ usato per i calcoli di andata/ritorno).
 cp .env.example .env
 ```
 
-## 4. Avvio in locale
+## 5. Avvio in locale
 
 ```
 npm install
 npm run dev
 ```
 
-## 5. Carica su GitHub
+## 6. Carica su GitHub
 
 ```
 git init
@@ -56,7 +69,7 @@ gh repo create gestione-trasporti --private --source=. --push
 
 (oppure crea il repo dall'interfaccia GitHub e collega il remote con `git remote add origin ...`)
 
-## 6. Deploy su Vercel
+## 7. Deploy su Vercel
 
 1. Vai su https://vercel.com → **Add New → Project** → importa il repo GitHub appena creato.
 2. Framework rilevato automaticamente: **Vite**.
@@ -79,27 +92,34 @@ Dettagli campo per campo nei commenti di `src/services/firestore.js`.
 - **Calendario** (`/calendario`): vista mensile/settimanale degli impegni del camion.
   Aprendo un impegno puoi **modificarlo** o **eliminarlo**. In cima alla pagina e
   nel dettaglio di ogni impegno vedi anche eventuali **divieti di transito** attivi
-  quel giorno.
+  quel giorno. I blocchi di indisponibilità in date specifiche (vedi sotto) compaiono
+  come appuntamenti in rosso, ben visibili.
 - **Nuova consegna/ritiro** (`/nuova-consegna`, e `/modifica-consegna/:id` per
   modificare un impegno esistente): form che geocodifica l'indirizzo, calcola i
   km stradali di andata dal deposito (profilo mezzo pesante), mostra la mappa
   col tracciato e calcola il costo da addebitare (km andata+ritorno × costo/km,
   arrotondato per eccesso a multipli di 5 €). Puoi selezionare un cliente già
-  salvato in anagrafica per compilare automaticamente nome e indirizzo.
-  **Il percorso sulla mappa è modificabile a mano**: clicca per aggiungere un
-  punto di passaggio, trascinalo per spostarlo, click destro per rimuoverlo,
-  poi premi "Ricalcola" per aggiornare km e costo — utile quando il calcolo
-  automatico non stima bene una strada percorribile dal camion.
-- **Clienti** (`/clienti`): anagrafica clienti (nome, indirizzo, referente,
-  telefono, note) da richiamare direttamente in fase di inserimento consegna.
-- **Divieti mezzi pesanti** (`/restrizioni`): qui inserisci manualmente i
-  divieti di transito che conosci (zona, giorni della settimana, orario,
-  soglia in quintali) — compaiono poi come avviso nel calendario. Non esiste
-  una fonte dati unica e affidabile per tutti i divieti comunali in Italia,
-  quindi vanno tenuti aggiornati a mano quando cambia un'ordinanza.
+  salvato in anagrafica e, se ne ha più di una, scegliere tra le sue destinazioni
+  per compilare automaticamente l'indirizzo.
+  **Il percorso sulla mappa si corregge trascinando la linea, come su Google Maps**:
+  tieni premuto sul tracciato arancione e trascinalo nel punto giusto — km e costo
+  si aggiornano da soli al rilascio. Le tappe aggiunte si possono anche spostare
+  trascinandole singolarmente o eliminare con click destro.
+- **Clienti** (`/clienti`): anagrafica clienti con **più destinazioni per cliente**
+  (sede, magazzini, cantieri...), ciascuna richiamabile direttamente in fase di
+  inserimento consegna senza doverla riscrivere.
+- **Divieti mezzi pesanti** (`/restrizioni`): due sezioni distinte —
+  divieti **ricorrenti** per giorno della settimana (es. "Centro storico Bergamo,
+  lun-ven 8-20") che compaiono come avviso nel calendario, e blocchi di
+  **indisponibilità in date specifiche** (es. "sabato 18/07 dalle 9:00 alle 22:00")
+  che compaiono come veri appuntamenti in rosso nel calendario. Non esiste una
+  fonte dati unica e affidabile per tutti i divieti comunali in Italia, quindi
+  vanno tenuti aggiornati a mano quando cambia un'ordinanza.
 - **Mezzo e scadenze** (`/scadenze`): anagrafica del camion (portata, misure
-  cassone) e le 4 scadenze richieste con relativo costo; badge di stato
-  (verde/ambra/rosso) in base a quanti giorni mancano.
+  cassone), **caricamento di libretto, e di una copia per ogni scadenza**
+  (assicurazione, bollo, revisioni — PDF o foto, salvati su Cloudinary) e le
+  4 scadenze richieste con relativo costo; badge di stato (verde/ambra/rosso)
+  in base a quanti giorni mancano.
 - **Ottimizza percorso** (`/percorso`): per una data scelta, prende tutte le
   consegne/ritiri pianificati e calcola l'ordine di tappe che minimizza i km
   totali, rispettando la portata e il volume del cassone (motore VROOM via ORS).
