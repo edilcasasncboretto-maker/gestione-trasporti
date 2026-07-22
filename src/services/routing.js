@@ -61,7 +61,16 @@ export async function calcolaPercorsoConTappe(punti, mezzo) {
   const metri = data.features[0].properties.summary.distance
   const durataMin = data.features[0].properties.summary.duration / 60
   const geometria = data.features[0].geometry // GeoJSON LineString, utile per disegnare la rotta su mappa
-  return { km: metri / 1000, durataMin, geometria }
+
+  // Per ogni tratta (tra due punti consecutivi in ingresso) memorizziamo l'indice
+  // finale nella geometria complessiva. Serve a capire, quando l'utente trascina
+  // il tracciato per aggiungere una tappa, tra quali due punti va inserita.
+  const confiniLeg = (data.features[0].properties.segments || []).map((segmento) => {
+    const ultimoStep = segmento.steps?.[segmento.steps.length - 1]
+    return ultimoStep ? ultimoStep.way_points[1] : null
+  })
+
+  return { km: metri / 1000, durataMin, geometria, confiniLeg }
 }
 
 /*

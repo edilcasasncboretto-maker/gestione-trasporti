@@ -57,11 +57,12 @@ export function eliminaCliente(id) {
 Struttura documento clienti/{id}:
 {
   nome: 'string',
-  indirizzo: 'string',
-  coord: { lat, lng },       // geocodificato e salvato una volta sola, per non richiamare l'API ogni volta
   referente: 'string',
   telefono: 'string',
-  note: 'string'
+  note: 'string',
+  destinazioni: [
+    { id: 'string', etichetta: 'string', indirizzo: 'string', coord: { lat, lng } }
+  ]
 }
 */
 
@@ -98,6 +99,36 @@ Struttura documento restrizioni/{id}:
 }
 */
 
+// ---- Indisponibilità del mezzo in date specifiche (es. fermo per manutenzione,
+//      divieto straordinario un certo giorno) — compaiono come appuntamento nel calendario
+const indisponibilitaRef = collection(db, 'indisponibilita')
+
+export function ascoltaIndisponibilita(callback) {
+  return onSnapshot(indisponibilitaRef, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  })
+}
+
+export function creaIndisponibilita(dati) {
+  return addDoc(indisponibilitaRef, { ...dati, createdAt: new Date().toISOString() })
+}
+
+export function eliminaIndisponibilita(id) {
+  return deleteDoc(doc(db, 'indisponibilita', id))
+}
+
+/*
+Struttura documento indisponibilita/{id}:
+{
+  motivo: 'string',        // es. "Divieto straordinario centro" o "Manutenzione mezzo"
+  dataInizio: 'YYYY-MM-DD',
+  oraInizio: 'HH:mm',
+  dataFine: 'YYYY-MM-DD',
+  oraFine: 'HH:mm',
+  note: 'string'
+}
+*/
+
 // ---- Mezzo (dati unici del camion) --------------------------------------
 const mezzoDocRef = doc(db, 'mezzo', 'principale')
 
@@ -126,6 +157,7 @@ Struttura documento mezzo/principale:
   cassone_larghezza_m: 2.4,
   cassone_altezza_m: 2.3,
   km_attuali: 84500,
+  libretto: { url: 'https://...', nome: 'libretto.pdf', caricatoIl: '2026-07-22T10:00:00.000Z' },
   scadenze: {
     assicurazione:   { data: '2026-11-10', costo: 1450 },
     bollo:           { data: '2026-09-01', costo: 890 },
