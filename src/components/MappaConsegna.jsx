@@ -1,5 +1,5 @@
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 
 const iconaEstremo = new L.Icon({
@@ -40,24 +40,110 @@ function GestoreClick({ attivo, onClick }) {
   return null
 }
 
+// Trova, tra i punti della geometria del percorso, l'indice più vicino a una posizione data.
+function indiceGeometriaPiuVicino(geometria, latlng) {
+  let migliorIndice = 0
+  let migliorDistanza = Infinity
+  geometria.coordinates.forEach(([lng, lat], i) => {
+    const d = L.latLng(lat, lng).distanceTo(latlng)
+    if (d < migliorDistanza) {
+      migliorDistanza = d
+      migliorIndice = i
+    }
+  })
+  return migliorIndice
+}
+
+// Dato l'indice nella geometria complessiva, capisce a quale tratta (tra due punti
+// consecutivi del percorso) appartiene, usando i confini calcolati da routing.js.
+// Ritorna la posizione in cui inserire la nuova tappa nell'array `tappe`.
+function posizioneInserimento(indiceGeometria, confiniLeg) {
+  if (!confiniLeg || confiniLeg.length === 0) return 0
+  for (let i = 0; i < confiniLeg.length; i++) {
+    if (confiniLeg[i] == null || indiceGeometria <= confiniLeg[i]) return i
+  }
+  return confiniLeg.length - 1
+}
+
+// Abilita il trascinamento diretto della linea del percorso (come su Google Maps):
+// tenendo premuto sul tracciato e trascinando, si crea una nuova tappa nel punto
+// in cui si rilascia il tasto, inserita automaticamente nella posizione corretta.
+function LineaTrascinabile({ polylineRef, attivo, geometria, confiniLeg, onNuovaTappa }) {
+  const map = useMap()
+  const trascinamento = useRef(null)
+
+  useEffect(() => {
+    const layer = polylineRef.current
+    if (!layer || !attivo || !geometria) return
+
+    function alMouseDown(e) {
+      L.DomEvent.stop(e)
+      map.dragging.disable()
+      trascinamento.current = true
+      map.on('mousemove', alMuoviMouse)
+      map.on('mouseup', alRilascioMouse)
+      map.getContainer().style.cursor = 'grabbing'
+    }
+
+    function alMuoviMouse() {
+      // Il tracciato provvisorio si aggiorna visivamente solo al rilascio,
+      // per non moltiplicare le chiamate al servizio di instradamento.
+    }
+
+    function alRilascioMouse(e) {
+      map.off('mousemove', alMuoviMouse)
+      map.off('mouseup', alRilascioMouse)
+      map.dragging.enable()
+      map.getContainer().style.cursor = ''
+      trascinamento.current = false
+      const indiceGeometria = indiceGeometriaPiuVicino(geometria, e.latlng)
+      const posizione = posizioneInserimento(indiceGeometria, confiniLeg)
+      onNuovaTappa(posizione, { lat: e.latlng.lat, lng: e.latlng.lng })
+    }
+
+    layer.on('mousedown', alMouseDown)
+    return () => {
+      layer.off('mousedown', alMouseDown)
+      map.off('mousemove', alMuoviMouse)
+      map.off('mouseup', alRilascioMouse)
+    }
+  }, [polylineRef.current, attivo, geometria, confiniLeg])
+
+  return null
+}
+
 /*
 Props:
 - partenza, arrivo: { lat, lng } — estremi fissi del percorso
-- tappe: [{ lat, lng }] — punti intermedi che l'utente può aggiungere/trascinare per correggere il percorso
+- tappe: [{ lat, lng }] — punti intermedi, modificabili
 - onTappeChange(nuoveTappe): richiamata quando l'utente aggiunge, sposta o rimuove una tappa
 - geometriaRoute: GeoJSON LineString del percorso calcolato (opzionale)
-- modificabile: se true, un click sulla mappa aggiunge una tappa; le tappe si trascinano
-  e si eliminano con click destro
+- confiniLeg: indici di confine tra le tratte nella geometria (restituiti da calcolaPercorsoConTappe)
+- modificabile: se true, si può trascinare la linea per aggiungere una tappa nel punto esatto,
+  trascinare una tappa esistente per spostarla, click destro per eliminarla
 */
-export default function MappaConsegna({ partenza, arrivo, tappe = [], onTappeChange, geometriaRoute, modificabile = false }) {
+export default function MappaConsegna({ partenza, arrivo, tappe = [], onTappeChange, geometriaRoute, confiniLeg, modificabile = false }) {
   const centro = partenza || { lat: 42.5, lng: 12.5 }
+  const polylineRef = useRef(null)
 
   const puntiPolilinea = geometriaRoute
     ? geometriaRoute.coordinates.map(([lng, lat]) => [lat, lng])
     : null
 
   function aggiungiTappa(latlng) {
-    onTappeChange?.([...tappe, { lat: latlng.lat, lng: latlng.lng }])
+    if (geometriaRoute) {
+      const indiceGeometria = indiceGeometriaPiuVicino(geometriaRoute, latlng)
+      const posizione = posizioneInserimento(indiceGeometria, confiniLeg)
+      inserisciTappa(posizione, { lat: latlng.lat, lng: latlng.lng })
+    } else {
+      onTappeChange?.([...tappe, { lat: latlng.lat, lng: latlng.lng }])
+    }
+  }
+
+  function inserisciTappa(posizione, punto) {
+    const nuove = tappe.slice()
+    nuove.splice(posizione, 0, punto)
+    onTappeChange?.(nuove)
   }
 
   function spostaTappa(indice, latlng) {
@@ -72,7 +158,7 @@ export default function MappaConsegna({ partenza, arrivo, tappe = [], onTappeCha
 
   return (
     <div>
-      <MapContainer center={[centro.lat, centro.lng]} zoom={6} style={{ height: 360, borderRadius: 6, cursor: modificabile ? 'copy' : '' }}>
+      <MapContainer center={[centro.lat, centro.lng]} zoom={6} style={{ height: 360, borderRadius: 6 }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -91,14 +177,30 @@ export default function MappaConsegna({ partenza, arrivo, tappe = [], onTappeCha
             }}
           />
         ))}
-        {puntiPolilinea && <Polyline positions={puntiPolilinea} color="#f2a900" weight={4} />}
+        {puntiPolilinea && (
+          <Polyline
+            ref={polylineRef}
+            positions={puntiPolilinea}
+            color="#f2a900"
+            weight={6}
+            eventHandlers={modificabile ? { mouseover: (e) => (e.target._map.getContainer().style.cursor = 'grab') } : {}}
+          />
+        )}
         <GestoreClick attivo={modificabile} onClick={aggiungiTappa} />
+        <LineaTrascinabile
+          polylineRef={polylineRef}
+          attivo={modificabile}
+          geometria={geometriaRoute}
+          confiniLeg={confiniLeg}
+          onNuovaTappa={inserisciTappa}
+        />
         <AdattaVista partenza={partenza} arrivo={arrivo} />
       </MapContainer>
       {modificabile && (
         <p style={{ fontSize: 12, color: 'var(--nebbia-400)', marginTop: 6 }}>
-          Clicca sulla mappa per aggiungere un punto di passaggio, trascinalo per spostarlo,
-          click destro per rimuoverlo. Poi premi "Ricalcola" per aggiornare km e costo.
+          Trascina il tracciato arancione per correggere il percorso (si aggiorna in automatico
+          appena rilasci). Le tappe già aggiunte si trascinano per spostarle o si eliminano con
+          click destro. Puoi anche cliccare su un punto vuoto della mappa per aggiungere una tappa.
         </p>
       )}
     </div>
