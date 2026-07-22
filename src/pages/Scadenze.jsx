@@ -1,20 +1,28 @@
 import { useEffect, useState } from 'react'
 import { ascoltaMezzo, salvaMezzo } from '../services/firestore'
 import { ETICHETTE_SCADENZE, formattaData, statoScadenza } from '../utils/dateUtils'
+import { caricaDocumento } from '../services/documenti'
 
 const CHIAVI_SCADENZE = ['assicurazione', 'bollo', 'revisione_mezzo', 'revisione_gru']
 
 const vuoto = {
   targa: '', modello: '', portata_kg: '', cassone_lunghezza_m: '', cassone_larghezza_m: '',
-  cassone_altezza_m: '', km_attuali: '',
-  scadenze: Object.fromEntries(CHIAVI_SCADENZE.map((k) => [k, { data: '', costo: '' }])),
+  cassone_altezza_m: '', km_attuali: '', libretto: null,
+  scadenze: Object.fromEntries(CHIAVI_SCADENZE.map((k) => [k, { data: '', costo: '', documento: null }])),
 }
 
 export default function Scadenze() {
   const [dati, setDati] = useState(vuoto)
   const [salvataggio, setSalvataggio] = useState(false)
 
-  useEffect(() => ascoltaMezzo((m) => { if (m) setDati({ ...vuoto, ...m, scadenze: { ...vuoto.scadenze, ...m.scadenze } }) }), [])
+  // Stato dei caricamenti documento: uno slot per "libretto" e uno per ogni scadenza
+  const [fileScelti, setFileScelti] = useState({})
+  const [caricamentoDoc, setCaricamentoDoc] = useState({})
+  const [erroreDoc, setErroreDoc] = useState({})
+
+  useEffect(() => ascoltaMezzo((m) => {
+    if (m) setDati({ ...vuoto, ...m, scadenze: { ...vuoto.scadenze, ...m.scadenze } })
+  }), [])
 
   function campo(chiave, valore) {
     setDati((d) => ({ ...d, [chiave]: valore }))
@@ -41,6 +49,52 @@ export default function Scadenze() {
     setSalvataggio(false)
   }
 
+  // slot: 'libretto' oppure una delle chiavi di CHIAVI_SCADENZE
+  async function caricaFile(slot) {
+    const file = fileScelti[slot]
+    if (!file) return
+    setErroreDoc((s) => ({ ...s, [slot]: null }))
+    setCaricamentoDoc((s) => ({ ...s, [slot]: true }))
+    try {
+      const documento = await caricaDocumento(file, slot === 'libretto' ? 'mezzo/libretto' : `mezzo/${slot}`)
+      if (slot === 'libretto') {
+        await salvaMezzo({ libretto: documento })
+        setDati((d) => ({ ...d, libretto: documento }))
+      } else {
+        await salvaMezzo({ scadenze: { [slot]: { documento } } })
+        setDati((d) => ({ ...d, scadenze: { ...d.scadenze, [slot]: { ...d.scadenze[slot], documento } } }))
+      }
+      setFileScelti((s) => ({ ...s, [slot]: null }))
+    } catch (err) {
+      setErroreDoc((s) => ({ ...s, [slot]: err.message }))
+    } finally {
+      setCaricamentoDoc((s) => ({ ...s, [slot]: false }))
+    }
+  }
+
+  function BloccoDocumento({ slot, documentoAttuale }) {
+    return (
+      <div style={{ marginTop: 8 }}>
+        {documentoAttuale?.url && (
+          <p style={{ fontSize: 12, margin: '0 0 6px' }}>
+            📎 <a href={documentoAttuale.url} target="_blank" rel="noreferrer">{documentoAttuale.nome}</a>
+          </p>
+        )}
+        <input
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          onChange={(e) => setFileScelti((s) => ({ ...s, [slot]: e.target.files?.[0] || null }))}
+          style={{ fontSize: 12 }}
+        />
+        <button type="button" className="btn-secondario" style={{ marginTop: 6, padding: '5px 10px', fontSize: 12 }}
+          onClick={() => caricaFile(slot)} disabled={!fileScelti[slot] || caricamentoDoc[slot]}>
+          {caricamentoDoc[slot] ? 'Caricamento…' : documentoAttuale?.url ? 'Sostituisci' : 'Carica copia'}
+        </button>
+        {erroreDoc[slot] && <p style={{ color: 'var(--rosso-scadenza)', fontSize: 12 }}>{erroreDoc[slot]}</p>}
+      </div>
+    )
+  }
+
   return (
     <div>
       <h1>Mezzo e scadenze</h1>
@@ -58,6 +112,11 @@ export default function Scadenze() {
           <div className="campo"><label>Cassone altezza (m)</label><input type="number" step="0.1" value={dati.cassone_altezza_m} onChange={(e) => campo('cassone_altezza_m', e.target.value)} /></div>
         </div>
 
+        <h2 style={{ marginTop: 20 }}>Libretto di circolazione</h2>
+        <div className="card" style={{ marginBottom: 16 }}>
+          <BloccoDocumento slot="libretto" documentoAttuale={dati.libretto} />
+        </div>
+
         <h2 style={{ marginTop: 20 }}>Scadenze</h2>
         <div className="griglia-scadenze" style={{ marginBottom: 16 }}>
           {CHIAVI_SCADENZE.map((chiave) => (
@@ -72,6 +131,7 @@ export default function Scadenze() {
                   value={dati.scadenze[chiave]?.costo || ''}
                   onChange={(e) => campoScadenza(chiave, 'costo', e.target.value)} />
               </div>
+              <BloccoDocumento slot={chiave} documentoAttuale={dati.scadenze[chiave]?.documento} />
             </div>
           ))}
         </div>

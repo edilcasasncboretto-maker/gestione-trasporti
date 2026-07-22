@@ -7,7 +7,7 @@ import getDay from 'date-fns/getDay'
 import { it } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { useNavigate } from 'react-router-dom'
-import { ascoltaConsegne, ascoltaRestrizioni, eliminaConsegna } from '../services/firestore'
+import { ascoltaConsegne, ascoltaRestrizioni, ascoltaIndisponibilita, eliminaConsegna, eliminaIndisponibilita } from '../services/firestore'
 import { formattaEuro } from '../utils/dateUtils'
 
 const localizer = dateFnsLocalizer({
@@ -21,29 +21,30 @@ export default function Calendario() {
   const navigate = useNavigate()
   const [consegne, setConsegne] = useState([])
   const [restrizioni, setRestrizioni] = useState([])
+  const [indisponibilita, setIndisponibilita] = useState([])
   const [selezionata, setSelezionata] = useState(null)
+  const [blocco, setBlocco] = useState(null)
 
   useEffect(() => {
     const u1 = ascoltaConsegne(setConsegne)
     const u2 = ascoltaRestrizioni(setRestrizioni)
-    return () => { u1(); u2() }
+    const u3 = ascoltaIndisponibilita(setIndisponibilita)
+    return () => { u1(); u2(); u3() }
   }, [])
 
-  const eventi = useMemo(
-    () =>
-      consegne.map((c) => {
-        const inizio = new Date(`${c.data}T${c.oraInizio || '08:00'}`)
-        const fine = new Date(`${c.data}T${c.oraFine || '09:00'}`)
-        return {
-          id: c.id,
-          title: `${c.tipo === 'ritiro' ? 'Ritiro' : 'Consegna'} — ${c.cliente}`,
-          start: inizio,
-          end: fine,
-          risorsa: c,
-        }
-      }),
-    [consegne]
-  )
+  const eventi = useMemo(() => {
+    const eventiConsegne = consegne.map((c) => {
+      const inizio = new Date(`${c.data}T${c.oraInizio || '08:00'}`)
+      const fine = new Date(`${c.data}T${c.oraFine || '09:00'}`)
+      return { id: c.id, title: `${c.tipo === 'ritiro' ? 'Ritiro' : 'Consegna'} — ${c.cliente}`, start: inizio, end: fine, tipo: 'consegna', risorsa: c }
+    })
+    const eventiBlocchi = indisponibilita.map((i) => {
+      const inizio = new Date(`${i.dataInizio}T${i.oraInizio || '00:00'}`)
+      const fine = new Date(`${i.dataFine || i.dataInizio}T${i.oraFine || '23:59'}`)
+      return { id: i.id, title: `🚫 Camion non disponibile — ${i.motivo}`, start: inizio, end: fine, tipo: 'blocco', risorsa: i }
+    })
+    return [...eventiConsegne, ...eventiBlocchi]
+  }, [consegne, indisponibilita])
 
   function restrizioniAttiveNelGiorno(dataISO) {
     if (!dataISO) return []
@@ -58,6 +59,18 @@ export default function Calendario() {
       await eliminaConsegna(idConsegna)
       setSelezionata(null)
     }
+  }
+
+  async function eliminaBlocco(id) {
+    if (confirm('Eliminare questo blocco di indisponibilità?')) {
+      await eliminaIndisponibilita(id)
+      setBlocco(null)
+    }
+  }
+
+  function selezionaEvento(evento) {
+    if (evento.tipo === 'blocco') setBlocco(evento.risorsa)
+    else setSelezionata(evento.risorsa)
   }
 
   return (
@@ -95,11 +108,12 @@ export default function Calendario() {
           }}
           eventPropGetter={(evento) => ({
             style: {
-              backgroundColor: evento.risorsa.tipo === 'ritiro' ? '#2f8f5b' : '#14181d',
+              backgroundColor: evento.tipo === 'blocco' ? '#c9432f' : evento.risorsa.tipo === 'ritiro' ? '#2f8f5b' : '#14181d',
               borderRadius: 3,
+              fontWeight: evento.tipo === 'blocco' ? 700 : 400,
             },
           })}
-          onSelectEvent={(evento) => setSelezionata(evento.risorsa)}
+          onSelectEvent={selezionaEvento}
         />
       </div>
 
@@ -127,6 +141,18 @@ export default function Calendario() {
             <button className="btn-primario" onClick={() => navigate(`/modifica-consegna/${selezionata.id}`)}>Modifica</button>
             <button className="btn-secondario" style={{ color: 'var(--rosso-scadenza)' }} onClick={() => elimina(selezionata.id)}>Elimina</button>
             <button className="btn-secondario" onClick={() => setSelezionata(null)}>Chiudi</button>
+          </div>
+        </div>
+      )}
+
+      {blocco && (
+        <div className="card" style={{ marginTop: 20, borderColor: 'var(--rosso-scadenza)' }}>
+          <h2 style={{ color: 'var(--rosso-scadenza)' }}>Camion non disponibile — {blocco.motivo}</h2>
+          <p><strong>Dal:</strong> {blocco.dataInizio} {blocco.oraInizio} <strong>al:</strong> {blocco.dataFine} {blocco.oraFine}</p>
+          {blocco.note && <p><strong>Note:</strong> {blocco.note}</p>}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-secondario" style={{ color: 'var(--rosso-scadenza)' }} onClick={() => eliminaBlocco(blocco.id)}>Elimina blocco</button>
+            <button className="btn-secondario" onClick={() => setBlocco(null)}>Chiudi</button>
           </div>
         </div>
       )}

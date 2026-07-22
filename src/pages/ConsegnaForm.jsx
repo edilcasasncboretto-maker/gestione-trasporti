@@ -20,11 +20,13 @@ export default function ConsegnaForm() {
   const [form, setForm] = useState(vuoto)
   const [clienti, setClienti] = useState([])
   const [clienteSelezionato, setClienteSelezionato] = useState('')
+  const [destinazioneSelezionata, setDestinazioneSelezionata] = useState('')
   const [mezzo, setMezzo] = useState(null)
 
   // Punti geocodificati del percorso e tappe intermedie modificabili a mano
   const [deposito, setDeposito] = useState(null)
   const [destinazione, setDestinazione] = useState(null)
+  const [coordCache, setCoordCache] = useState(null) // { indirizzo, coord } salvata scegliendo una destinazione da anagrafica
   const [tappe, setTappe] = useState([])
   const [calcolo, setCalcolo] = useState(null)
 
@@ -49,15 +51,28 @@ export default function ConsegnaForm() {
     })
   }, [id, modalitaModifica])
 
+  const cliente = clienti.find((c) => c.id === clienteSelezionato)
+  const destinazioniCliente = cliente?.destinazioni || []
+
   function campo(chiave, valore) {
     setForm((f) => ({ ...f, [chiave]: valore }))
   }
 
   function selezionaCliente(idCliente) {
     setClienteSelezionato(idCliente)
+    setDestinazioneSelezionata('')
     const c = clienti.find((x) => x.id === idCliente)
-    if (c) {
-      setForm((f) => ({ ...f, cliente: c.nome, indirizzo: c.indirizzo }))
+    if (c) setForm((f) => ({ ...f, cliente: c.nome }))
+  }
+
+  function selezionaDestinazione(idDestinazione) {
+    setDestinazioneSelezionata(idDestinazione)
+    const dest = destinazioniCliente.find((d) => d.id === idDestinazione)
+    if (dest) {
+      setForm((f) => ({ ...f, indirizzo: dest.indirizzo }))
+      // La destinazione è già geocodificata in anagrafica: evitiamo di richiamare
+      // il servizio di geocodifica, la useremo direttamente al momento del calcolo.
+      setCoordCache({ indirizzo: dest.indirizzo, coord: dest.coord })
     }
   }
 
@@ -67,7 +82,9 @@ export default function ConsegnaForm() {
     setCaricamento(true)
     try {
       const dep = await geocodifica(DEPOSITO_INDIRIZZO)
-      const dest = await geocodifica(form.indirizzo)
+      const dest = coordCache && coordCache.indirizzo === form.indirizzo
+        ? coordCache.coord
+        : await geocodifica(form.indirizzo)
       setDeposito(dep)
       setDestinazione(dest)
       await ricalcola(dep, dest, tappe)
@@ -79,16 +96,16 @@ export default function ConsegnaForm() {
   }
 
   // Ricalcola solo il percorso (e il costo) usando deposito/destinazione già noti
-  // più le tappe intermedie correnti — usata dopo aver corretto il percorso a mano.
+  // più le tappe intermedie correnti.
   async function ricalcola(depositoAttuale = deposito, destinazioneAttuale = destinazione, tappeAttuali = tappe) {
     if (!depositoAttuale || !destinazioneAttuale) return
     setErrore(null)
     setCaricamento(true)
     try {
       const punti = [depositoAttuale, ...tappeAttuali, destinazioneAttuale]
-      const { km, geometria } = await calcolaPercorsoConTappe(punti, mezzo)
+      const { km, geometria, confiniLeg } = await calcolaPercorsoConTappe(punti, mezzo)
       const costo = calcolaCostoTrasporto(km, parseFloat(form.costoAlKm) || 0)
-      setCalcolo({ geometria, km, ...costo })
+      setCalcolo({ geometria, confiniLeg, km, ...costo })
     } catch (e) {
       setErrore(e.message)
     } finally {
@@ -96,9 +113,12 @@ export default function ConsegnaForm() {
     }
   }
 
+  // Ogni modifica al tracciato (aggiunta/spostamento/rimozione di una tappa,
+  // oppure trascinamento diretto della linea) ricalcola km e costo in automatico,
+  // come su Google Maps — non serve un pulsante "Ricalcola" separato.
   function aggiornaTappe(nuoveTappe) {
     setTappe(nuoveTappe)
-    setCalcolo(null) // serve un nuovo "Ricalcola" esplicito per aggiornare km/costo
+    ricalcola(deposito, destinazione, nuoveTappe)
   }
 
   async function salva(e) {
@@ -154,12 +174,23 @@ export default function ConsegnaForm() {
         </div>
 
         {clienti.length > 0 && (
-          <div className="campo">
-            <label>Cliente da anagrafica (opzionale)</label>
-            <select value={clienteSelezionato} onChange={(e) => selezionaCliente(e.target.value)}>
-              <option value="">— scegli per compilare automaticamente —</option>
-              {clienti.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
+          <div style={{ display: 'grid', gridTemplateColumns: destinazioniCliente.length > 0 ? '1fr 1fr' : '1fr', gap: 16 }}>
+            <div className="campo">
+              <label>Cliente da anagrafica (opzionale)</label>
+              <select value={clienteSelezionato} onChange={(e) => selezionaCliente(e.target.value)}>
+                <option value="">— scegli per compilare automaticamente —</option>
+                {clienti.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+            {destinazioniCliente.length > 0 && (
+              <div className="campo">
+                <label>Destinazione</label>
+                <select value={destinazioneSelezionata} onChange={(e) => selezionaDestinazione(e.target.value)}>
+                  <option value="">— scegli indirizzo —</option>
+                  {destinazioniCliente.map((d) => <option key={d.id} value={d.id}>{d.etichetta || d.indirizzo}</option>)}
+                </select>
+              </div>
+            )}
           </div>
         )}
 
@@ -230,14 +261,10 @@ export default function ConsegnaForm() {
               tappe={tappe}
               onTappeChange={aggiornaTappe}
               geometriaRoute={calcolo?.geometria}
+              confiniLeg={calcolo?.confiniLeg}
               modificabile
             />
-            {tappe.length > 0 && !calcolo && (
-              <button type="button" className="btn-segnale" style={{ marginTop: 10 }}
-                onClick={() => ricalcola()} disabled={caricamento}>
-                {caricamento ? 'Ricalcolo…' : 'Ricalcola percorso e costo'}
-              </button>
-            )}
+            {caricamento && <p style={{ fontSize: 12, color: 'var(--nebbia-400)' }}>Ricalcolo percorso…</p>}
             {calcolo && (
               <div className="card" style={{ marginTop: 12 }}>
                 <p>Andata: <strong className="numero">{Math.round(calcolo.km * 10) / 10} km</strong> — Andata+ritorno: <strong className="numero">{calcolo.kmTotali} km</strong></p>
