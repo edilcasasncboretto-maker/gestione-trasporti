@@ -36,12 +36,37 @@ carta di credito**.
    - Puoi lasciare tutto il resto di default, oppure impostare una cartella base tipo `gestione-trasporti`.
    - Salva e copia il **nome del preset** che ti viene assegnato (o quello che hai scelto tu) — ti serve nel passo 4.
 
-## 3. Ottieni la API key gratuita di OpenRouteService
+## 3. Configura l'invio email delle notifiche (Resend + Firebase)
+
+Le notifiche funzionano tramite un piccolo controllo automatico che gira una
+volta al giorno (gratis, vedi sezione "Come funziona" più sotto). Servono due cose:
+
+**a) Account gratuito Resend (invio email)**
+
+1. Registrati su https://resend.com con l'indirizzo email a cui vuoi ricevere gli
+   avvisi (es. l'email dell'ufficio) — **è importante registrarti proprio con
+   quell'indirizzo**: senza un dominio personalizzato verificato (passaggio
+   avanzato, non necessario qui), Resend permette di inviare gratuitamente solo
+   verso l'indirizzo con cui ti sei registrato, il che per un singolo ufficio va
+   benissimo così com'è.
+2. Vai su **API Keys** → **Create API Key**, lascia i permessi di default, copia
+   la chiave (inizia con `re_...`) — ti serve nel passo successivo.
+
+**b) Chiave di servizio Firebase (permette alla funzione automatica di leggere Firestore)**
+
+1. Nella Console Firebase del tuo progetto, vai su **Impostazioni progetto**
+   (icona ingranaggio) → scheda **Account di servizio**.
+2. Clicca **Genera nuova chiave privata** → conferma. Si scarica un file `.json`.
+3. Apri quel file con un editor di testo (anche il Blocco note/TextEdit va bene),
+   seleziona tutto il contenuto e copialo: ti serve tra un attimo, per intero,
+   incollato come UNICA variabile d'ambiente su Vercel.
+
+## 4. Ottieni la API key gratuita di OpenRouteService
 
 1. Registrati su https://openrouteservice.org/dev/#/signup
 2. Crea una API key gratuita (piano "free", limiti ampi per uso da ufficio singolo).
 
-## 4. Configura le variabili d'ambiente
+## 5. Configura le variabili d'ambiente
 
 Copia `.env.example` in `.env` e compila tutti i valori (config Firebase, API
 key ORS, indirizzo del tuo deposito/magazzino — è il punto di partenza/arrivo
@@ -51,14 +76,14 @@ usato per i calcoli di andata/ritorno).
 cp .env.example .env
 ```
 
-## 5. Avvio in locale
+## 6. Avvio in locale
 
 ```
 npm install
 npm run dev
 ```
 
-## 6. Carica su GitHub
+## 7. Carica su GitHub
 
 ```
 git init
@@ -69,12 +94,26 @@ gh repo create gestione-trasporti --private --source=. --push
 
 (oppure crea il repo dall'interfaccia GitHub e collega il remote con `git remote add origin ...`)
 
-## 7. Deploy su Vercel
+## 8. Deploy su Vercel
 
 1. Vai su https://vercel.com → **Add New → Project** → importa il repo GitHub appena creato.
 2. Framework rilevato automaticamente: **Vite**.
 3. In **Environment Variables**, incolla tutte le chiavi presenti nel tuo `.env` (Vercel non legge il file `.env`, vanno inserite manualmente nel pannello).
-4. Deploy. Ad ogni push su GitHub, Vercel aggiorna automaticamente l'app.
+4. Aggiungi **anche** queste tre variabili, che servono solo alla funzione automatica delle notifiche e non vanno mai messe nel file `.env` del sito (sono segrete, lato server):
+   - `RESEND_API_KEY` → la chiave copiata al passo 3a
+   - `FIREBASE_SERVICE_ACCOUNT_KEY` → l'intero contenuto del file `.json` scaricato al passo 3b, incollato così com'è (Vercel gestisce bene anche testo su più righe)
+   - `CRON_SECRET` → una stringa a caso, lunga, inventata da te (es. generata su https://www.uuidgenerator.net) — serve solo a impedire che altri possano invocare la funzione di invio email dall'esterno
+5. Deploy. Ad ogni push su GitHub, Vercel aggiorna automaticamente l'app.
+
+### Come funziona il controllo automatico
+
+Vercel esegue la funzione `api/controlla-scadenze.js` una volta al giorno da
+solo (è configurato in `vercel.json`, orario indicativo verso le 7-8 del
+mattino — sul piano gratuito Vercel garantisce l'esecuzione entro l'ora
+indicata, non al minuto esatto). Non devi fare nulla: una volta impostate le
+variabili d'ambiente sopra e configurata l'email nella pagina "Notifiche"
+dell'app, parte da sola. Puoi verificare che tutto funzioni con il pulsante
+"Invia email di prova" nella stessa pagina.
 
 ## Struttura dati Firestore
 
@@ -123,13 +162,17 @@ Dettagli campo per campo nei commenti di `src/services/firestore.js`.
 - **Ottimizza percorso** (`/percorso`): per una data scelta, prende tutte le
   consegne/ritiri pianificati e calcola l'ordine di tappe che minimizza i km
   totali, rispettando la portata e il volume del cassone (motore VROOM via ORS).
+- **Notifiche** (`/notifiche`): imposta l'email a cui ricevere gli avvisi e i
+  giorni di anticipo desiderati (es. 30, 7, 1 giorni prima). Un controllo
+  automatico gira una volta al giorno lato server e invia un'email quando una
+  scadenza raggiunge una di quelle soglie — nessuna app aperta necessaria.
+  Pulsante "Invia email di prova" per verificare la configurazione.
 - **Cruscotto** (`/`): riepilogo scadenze urgenti e prossimi impegni.
 
 ## Prossimi passi possibili (da valutare insieme)
 
 - Autenticazione (login con email/ufficio) prima di esporre l'URL pubblicamente.
 - Storico chilometraggio del mezzo (non solo l'ultimo valore).
-- Notifiche automatiche (email) per le scadenze, non solo badge in app.
 - Stato "completata" sulle consegne con conferma e note di consegna.
 - Esportazione/fattura PDF del costo di trasporto calcolato.
 - Gestione multi-mezzo se in futuro si aggiunge un secondo camion.
