@@ -139,7 +139,10 @@ Dettagli campo per campo nei commenti di `src/services/firestore.js`.
   col tracciato e calcola il costo da addebitare (km andata+ritorno × costo/km,
   arrotondato per eccesso a multipli di 5 €). Puoi selezionare un cliente già
   salvato in anagrafica e, se ne ha più di una, scegliere tra le sue destinazioni
-  per compilare automaticamente l'indirizzo.
+  per compilare automaticamente l'indirizzo. Puoi allegare un **documento PDF o
+  foto relativo alla merce** (bolla, ordine, packing list...) e, se serve un
+  **costo fisso minimo di spedizione**, compilare il campo "Costo fisso forzato":
+  se impostato, sostituisce completamente il calcolo automatico km × costo/km.
   **Il percorso sulla mappa si corregge trascinando la linea, come su Google Maps**:
   tieni premuto sul tracciato arancione e trascinalo nel punto giusto — km e costo
   si aggiornano da soli al rilascio. Le tappe aggiunte si possono anche spostare
