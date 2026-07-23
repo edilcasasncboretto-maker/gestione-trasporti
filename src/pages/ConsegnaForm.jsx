@@ -4,12 +4,13 @@ import MappaConsegna from '../components/MappaConsegna'
 import { ascoltaClienti, creaConsegna, aggiornaConsegna, eliminaConsegna, leggiConsegna, leggiMezzo } from '../services/firestore'
 import { calcolaPercorsoConTappe, geocodifica } from '../services/routing'
 import { calcolaCostoTrasporto } from '../utils/costCalc'
+import { caricaDocumento } from '../services/documenti'
 
 const DEPOSITO_INDIRIZZO = import.meta.env.VITE_INDIRIZZO_DEPOSITO
 
 const vuoto = {
   tipo: 'consegna', cliente: '', indirizzo: '', data: '', oraInizio: '08:00', oraFine: '09:00',
-  descrizioneMerce: '', peso_kg: '', volume_m3: '', costoAlKm: '', note: '',
+  descrizioneMerce: '', peso_kg: '', volume_m3: '', costoAlKm: '', costoFisso: '', note: '',
 }
 
 export default function ConsegnaForm() {
@@ -33,6 +34,12 @@ export default function ConsegnaForm() {
   const [caricamento, setCaricamento] = useState(false)
   const [errore, setErrore] = useState(null)
 
+  // Documento PDF/foto relativo alla merce (es. bolla, ordine, packing list)
+  const [documento, setDocumento] = useState(null)
+  const [fileScelto, setFileScelto] = useState(null)
+  const [caricamentoFile, setCaricamentoFile] = useState(false)
+  const [erroreFile, setErroreFile] = useState(null)
+
   useEffect(() => ascoltaClienti(setClienti), [])
   useEffect(() => { leggiMezzo().then(setMezzo) }, [])
 
@@ -44,10 +51,12 @@ export default function ConsegnaForm() {
         tipo: c.tipo, cliente: c.cliente, indirizzo: c.indirizzo, data: c.data,
         oraInizio: c.oraInizio, oraFine: c.oraFine,
         descrizioneMerce: c.merce?.descrizione || '', peso_kg: c.merce?.peso_kg ?? '',
-        volume_m3: c.merce?.volume_m3 ?? '', costoAlKm: c.costoAlKm ?? '', note: c.note || '',
+        volume_m3: c.merce?.volume_m3 ?? '', costoAlKm: c.costoAlKm ?? '',
+        costoFisso: c.costoForzato ? c.costoTrasporto : '', note: c.note || '',
       })
       setDestinazione(c.coord || null)
       setTappe(c.tappe || [])
+      setDocumento(c.documento || null)
     })
   }, [id, modalitaModifica])
 
@@ -121,12 +130,28 @@ export default function ConsegnaForm() {
     ricalcola(deposito, destinazione, nuoveTappe)
   }
 
+  async function caricaFileMerce() {
+    if (!fileScelto) return
+    setErroreFile(null)
+    setCaricamentoFile(true)
+    try {
+      const doc = await caricaDocumento(fileScelto, 'consegne')
+      setDocumento(doc)
+      setFileScelto(null)
+    } catch (e) {
+      setErroreFile(e.message)
+    } finally {
+      setCaricamentoFile(false)
+    }
+  }
+
   async function salva(e) {
     e.preventDefault()
     if (!calcolo || !destinazione) {
       setErrore('Calcola prima il percorso e il costo.')
       return
     }
+    const costoFissoNumero = form.costoFisso !== '' && !isNaN(parseFloat(form.costoFisso)) ? parseFloat(form.costoFisso) : null
     const dati = {
       tipo: form.tipo,
       cliente: form.cliente,
@@ -141,11 +166,13 @@ export default function ConsegnaForm() {
         peso_kg: parseFloat(form.peso_kg) || 0,
         volume_m3: parseFloat(form.volume_m3) || 0,
       },
+      documento,
       costoAlKm: parseFloat(form.costoAlKm) || 0,
       kmAndata: Math.round((calcolo.km || 0) * 10) / 10,
       kmTotali: calcolo.kmTotali,
       costoTrasportoGrezzo: calcolo.costoGrezzo,
-      costoTrasporto: calcolo.costoTrasporto,
+      costoForzato: costoFissoNumero != null,
+      costoTrasporto: costoFissoNumero != null ? costoFissoNumero : calcolo.costoTrasporto,
       stato: 'pianificata',
       note: form.note,
     }
@@ -225,6 +252,23 @@ export default function ConsegnaForm() {
           <input value={form.descrizioneMerce} onChange={(e) => campo('descrizioneMerce', e.target.value)} />
         </div>
 
+        <div className="campo">
+          <label>Documento merce (PDF, bolla, ordine...)</label>
+          {documento?.url && (
+            <p style={{ fontSize: 12, margin: '0 0 6px' }}>
+              📎 <a href={documento.url} target="_blank" rel="noreferrer">{documento.nome}</a>
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ flex: 1 }}
+              onChange={(e) => setFileScelto(e.target.files?.[0] || null)} />
+            <button type="button" className="btn-secondario" onClick={caricaFileMerce} disabled={!fileScelto || caricamentoFile}>
+              {caricamentoFile ? 'Caricamento…' : documento?.url ? 'Sostituisci' : 'Carica'}
+            </button>
+          </div>
+          {erroreFile && <p style={{ color: 'var(--rosso-scadenza)', fontSize: 12 }}>{erroreFile}</p>}
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
           <div className="campo">
             <label>Peso (kg)</label>
@@ -238,6 +282,16 @@ export default function ConsegnaForm() {
             <label>Costo al km (€)</label>
             <input type="number" min="0" step="0.01" value={form.costoAlKm} onChange={(e) => { campo('costoAlKm', e.target.value); setCalcolo(null) }} />
           </div>
+        </div>
+
+        <div className="campo">
+          <label>Costo fisso forzato (€) — opzionale</label>
+          <input type="number" min="0" step="0.01" value={form.costoFisso} onChange={(e) => campo('costoFisso', e.target.value)}
+            placeholder="Lascia vuoto per usare il calcolo automatico" />
+          <p style={{ fontSize: 12, color: 'var(--nebbia-400)', marginTop: 4 }}>
+            Se compilato, questa cifra sostituisce interamente il calcolo km × costo/km
+            (utile per il minimo di spedizione sotto al quale non si scende).
+          </p>
         </div>
 
         <div className="campo">
@@ -268,8 +322,15 @@ export default function ConsegnaForm() {
             {calcolo && (
               <div className="card" style={{ marginTop: 12 }}>
                 <p>Andata: <strong className="numero">{Math.round(calcolo.km * 10) / 10} km</strong> — Andata+ritorno: <strong className="numero">{calcolo.kmTotali} km</strong></p>
-                <p>Costo grezzo: <span className="numero">{calcolo.costoGrezzo.toFixed(2)} €</span></p>
-                <p style={{ fontSize: 18 }}>Da addebitare al cliente (arrotondato): <strong className="numero">{calcolo.costoTrasporto} €</strong></p>
+                <p>Costo calcolato (km × costo/km, arrotondato): <span className="numero">{calcolo.costoTrasporto} €</span></p>
+                {form.costoFisso !== '' && !isNaN(parseFloat(form.costoFisso)) ? (
+                  <p style={{ fontSize: 18 }}>
+                    <span className="badge badge-attenzione" style={{ marginRight: 8 }}>Costo forzato</span>
+                    Da addebitare al cliente: <strong className="numero">{parseFloat(form.costoFisso).toFixed(2)} €</strong>
+                  </p>
+                ) : (
+                  <p style={{ fontSize: 18 }}>Da addebitare al cliente: <strong className="numero">{calcolo.costoTrasporto} €</strong></p>
+                )}
               </div>
             )}
           </div>
