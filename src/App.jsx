@@ -7,6 +7,7 @@ import Percorso from './pages/Percorso'
 import Scadenze from './pages/Scadenze'
 import Clienti from './pages/Clienti'
 import Restrizioni from './pages/Restrizioni'
+import Notifiche from './pages/Notifiche'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="scadenze" element={<Scadenze />} />
           <Route path="clienti" element={<Clienti />} />
           <Route path="restrizioni" element={<Restrizioni />} />
+          <Route path="notifiche" element={<Notifiche />} />
         </Route>
       </Routes>
     </BrowserRouter>
