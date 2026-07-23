@@ -198,15 +198,18 @@ Struttura documento consegne/{id}:
   cliente: 'string',
   indirizzo: 'string',
   coord: { lat, lng },
+  tappe: [{ lat, lng }],       // punti di passaggio inseriti manualmente sulla mappa
   data: 'YYYY-MM-DD',
   oraInizio: 'HH:mm',
   oraFine: 'HH:mm',
   merce: { descrizione: 'string', peso_kg: number, volume_m3: number },
+  documento: { url, nome, caricatoIl } | null,   // PDF/foto relativo alla merce (bolla, ordine...)
   costoAlKm: number,
   kmAndata: number,
   kmTotali: number,           // andata + ritorno
   costoTrasportoGrezzo: number,
-  costoTrasporto: number,      // arrotondato per eccesso a multipli di 5
+  costoForzato: boolean,        // true se il costo è stato impostato manualmente (minimo di spedizione)
+  costoTrasporto: number,      // arrotondato per eccesso a multipli di 5, oppure il valore forzato
   stato: 'pianificata' | 'completata' | 'annullata',
   note: 'string'
 }
