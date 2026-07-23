@@ -8,6 +8,7 @@ const voci = [
   { to: '/clienti', label: 'Clienti' },
   { to: '/restrizioni', label: 'Divieti mezzi pesanti' },
   { to: '/scadenze', label: 'Mezzo e scadenze' },
+  { to: '/notifiche', label: 'Notifiche' },
 ]
 
 export default function Layout() {
