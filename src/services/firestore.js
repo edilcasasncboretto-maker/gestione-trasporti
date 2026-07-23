@@ -129,6 +129,30 @@ Struttura documento indisponibilita/{id}:
 }
 */
 
+// ---- Impostazioni notifiche email scadenze -------------------------------
+const notificheDocRef = doc(db, 'impostazioni', 'notifiche')
+
+export function ascoltaImpostazioniNotifiche(callback) {
+  return onSnapshot(notificheDocRef, (snap) => {
+    callback(snap.exists() ? snap.data() : null)
+  })
+}
+
+export function salvaImpostazioniNotifiche(dati) {
+  return setDoc(notificheDocRef, dati, { merge: true })
+}
+
+/*
+Struttura documento impostazioni/notifiche:
+{
+  email: 'ufficio@azienda.it',
+  soglieGiorni: [30, 14, 7, 3, 1, 0],  // quanti giorni prima della scadenza ricevere un avviso
+  attivo: true
+}
+La funzione automatica che invia le email (api/controlla-scadenze.js) gira una
+volta al giorno tramite Vercel Cron e legge questi valori.
+*/
+
 // ---- Mezzo (dati unici del camion) --------------------------------------
 const mezzoDocRef = doc(db, 'mezzo', 'principale')
 
