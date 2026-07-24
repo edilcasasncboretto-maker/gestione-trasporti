@@ -6,9 +6,11 @@ const voci = [
   { to: '/nuova-consegna', label: 'Nuova consegna/ritiro' },
   { to: '/percorso', label: 'Ottimizza percorso' },
   { to: '/clienti', label: 'Clienti' },
+  { to: '/fornitori', label: 'Fornitori' },
   { to: '/restrizioni', label: 'Divieti mezzi pesanti' },
   { to: '/scadenze', label: 'Mezzo e scadenze' },
   { to: '/notifiche', label: 'Notifiche' },
+  { to: '/archivio', label: 'Archivio' },
 ]
 
 export default function Layout() {
