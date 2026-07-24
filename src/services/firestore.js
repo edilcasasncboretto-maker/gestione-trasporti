@@ -66,6 +66,33 @@ Struttura documento clienti/{id}:
 }
 */
 
+// ---- Fornitori (per i ritiri) --------------------------------------------
+const fornitoriRef = collection(db, 'fornitori')
+
+export function ascoltaFornitori(callback) {
+  const q = query(fornitoriRef, orderBy('nome', 'asc'))
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  })
+}
+
+export function creaFornitore(dati) {
+  return addDoc(fornitoriRef, { ...dati, createdAt: new Date().toISOString() })
+}
+
+export function aggiornaFornitore(id, dati) {
+  return updateDoc(doc(db, 'fornitori', id), dati)
+}
+
+export function eliminaFornitore(id) {
+  return deleteDoc(doc(db, 'fornitori', id))
+}
+
+/*
+Struttura documento fornitori/{id}: identica a clienti/{id} (stessa forma,
+usata per i ritiri invece che per le consegne).
+*/
+
 // ---- Restrizioni di transito mezzi pesanti (inserite manualmente) -------
 const restrizioniRef = collection(db, 'restrizioni')
 
@@ -195,11 +222,12 @@ Struttura documento mezzo/principale:
 Struttura documento consegne/{id}:
 {
   tipo: 'consegna' | 'ritiro',
-  cliente: 'string',
+  cliente: 'string',           // nome cliente (consegna) o fornitore (ritiro)
+  telefono: 'string',          // per contatti "spot" non presenti in anagrafica
   indirizzo: 'string',
   coord: { lat, lng },
   tappe: [{ lat, lng }],       // punti di passaggio inseriti manualmente sulla mappa
-  data: 'YYYY-MM-DD',
+  data: 'YYYY-MM-DD' | '',     // opzionale: vuota se non ancora concordata col cliente
   oraInizio: 'HH:mm',
   oraFine: 'HH:mm',
   merce: { descrizione: 'string', peso_kg: number, volume_m3: number },
