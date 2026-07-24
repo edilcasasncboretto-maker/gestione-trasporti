@@ -9,6 +9,7 @@ export const ETICHETTE_SCADENZE = {
   bollo: 'Bollo',
   revisione_mezzo: 'Revisione mezzo',
   revisione_gru: 'Revisione gru',
+  revisione_cronotachigrafo: 'Revisione cronotachigrafo',
 }
 
 // Ritorna { stato: 'ok'|'attenzione'|'scaduto', giorniRimanenti }
