@@ -6,8 +6,10 @@ import ConsegnaForm from './pages/ConsegnaForm'
 import Percorso from './pages/Percorso'
 import Scadenze from './pages/Scadenze'
 import Clienti from './pages/Clienti'
+import Fornitori from './pages/Fornitori'
 import Restrizioni from './pages/Restrizioni'
 import Notifiche from './pages/Notifiche'
+import Archivio from './pages/Archivio'
 
 export default function App() {
   return (
@@ -21,8 +23,10 @@ export default function App() {
           <Route path="percorso" element={<Percorso />} />
           <Route path="scadenze" element={<Scadenze />} />
           <Route path="clienti" element={<Clienti />} />
+          <Route path="fornitori" element={<Fornitori />} />
           <Route path="restrizioni" element={<Restrizioni />} />
           <Route path="notifiche" element={<Notifiche />} />
+          <Route path="archivio" element={<Archivio />} />
         </Route>
       </Routes>
     </BrowserRouter>
