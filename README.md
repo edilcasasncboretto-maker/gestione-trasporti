@@ -128,28 +128,44 @@ Dettagli campo per campo nei commenti di `src/services/firestore.js`.
 
 ## Cosa fa già questa v1
 
-- **Calendario** (`/calendario`): vista mensile/settimanale degli impegni del camion.
-  Aprendo un impegno puoi **modificarlo** o **eliminarlo**. In cima alla pagina e
-  nel dettaglio di ogni impegno vedi anche eventuali **divieti di transito** attivi
-  quel giorno. I blocchi di indisponibilità in date specifiche (vedi sotto) compaiono
+- **Cruscotto** (`/`): scadenze urgenti in cima, poi **due colonne affiancate**
+  — Consegne da fare / Ritiri da fare — con le date da definire in fondo alla
+  lista (non perse). Clicca su un impegno per aprirne il dettaglio senza uscire
+  dalla pagina: indirizzo, telefono, merce, documento allegato (apribile con un
+  click) e i pulsanti **Modifica**, **Segna come eseguita**, **Elimina** — non
+  serve più andare nel Calendario per queste azioni.
+- **Calendario** (`/calendario`): vista mensile/settimanale degli impegni con
+  data. Gli impegni **senza data ancora concordata** compaiono in un elenco a
+  parte sopra il calendario, così restano visibili senza dover forzare una data.
+  Aprendo un impegno puoi modificarlo, segnarlo come eseguito o eliminarlo. In
+  cima e nel dettaglio di ogni impegno vedi anche eventuali divieti di transito
+  attivi quel giorno. I blocchi di indisponibilità in date specifiche compaiono
   come appuntamenti in rosso, ben visibili.
 - **Nuova consegna/ritiro** (`/nuova-consegna`, e `/modifica-consegna/:id` per
-  modificare un impegno esistente): form che geocodifica l'indirizzo, calcola i
-  km stradali di andata dal deposito (profilo mezzo pesante), mostra la mappa
-  col tracciato e calcola il costo da addebitare (km andata+ritorno × costo/km,
-  arrotondato per eccesso a multipli di 5 €). Puoi selezionare un cliente già
-  salvato in anagrafica e, se ne ha più di una, scegliere tra le sue destinazioni
-  per compilare automaticamente l'indirizzo. Puoi allegare un **documento PDF o
-  foto relativo alla merce** (bolla, ordine, packing list...) e, se serve un
-  **costo fisso minimo di spedizione**, compilare il campo "Costo fisso forzato":
-  se impostato, sostituisce completamente il calcolo automatico km × costo/km.
-  **Il percorso sulla mappa si corregge trascinando la linea, come su Google Maps**:
-  tieni premuto sul tracciato arancione e trascinalo nel punto giusto — km e costo
-  si aggiornano da soli al rilascio. Le tappe aggiunte si possono anche spostare
-  trascinandole singolarmente o eliminare con click destro.
-- **Clienti** (`/clienti`): anagrafica clienti con **più destinazioni per cliente**
-  (sede, magazzini, cantieri...), ciascuna richiamabile direttamente in fase di
-  inserimento consegna senza doverla riscrivere.
+  modificare un impegno esistente): la data è **opzionale** (utile per segnarsi
+  un impegno non ancora concordato). C'è un campo **telefono** libero per i
+  contatti "spot" non salvati in anagrafica. Scegliendo **Consegna** compare
+  l'anagrafica **Clienti**, scegliendo **Ritiro** compare l'anagrafica
+  **Fornitori** — selezionandone uno si compilano nome, telefono e (se ne ha
+  più di una) la destinazione da scegliere tra quelle salvate. Puoi allegare un
+  **documento PDF o foto relativo alla merce** e, se serve un **costo fisso
+  minimo di spedizione**, compilare "Costo fisso forzato" per sostituire il
+  calcolo automatico. **Aprendo un impegno già salvato per modificarlo, km e
+  costo restano quelli già calcolati e salvati — non vengono ricalcolati in
+  automatico**: se hai bisogno di cambiare solo il telefono o una nota, salvi
+  senza toccare il percorso. Il ricalcolo (pulsante "Ricalcola percorso e
+  costo") resta comunque disponibile quando serve davvero. Il percorso sulla
+  mappa si corregge trascinando la linea, come su Google Maps: km e costo si
+  aggiornano da soli al rilascio (questo sì, essendo un'azione esplicita
+  sulla mappa).
+- **Clienti** (`/clienti`) e **Fornitori** (`/fornitori`): due anagrafiche
+  separate con **più destinazioni ciascuna** (sede, magazzini, cantieri...),
+  richiamabili direttamente in fase di inserimento a seconda che si tratti di
+  una consegna (clienti) o di un ritiro (fornitori).
+- **Archivio** (`/archivio`): storico di consegne/ritiri segnati come
+  **eseguiti** o **annullati**, con filtri per cliente/fornitore, indirizzo,
+  tipo, stato e intervallo di date. Da qui puoi anche riportare un impegno
+  archiviato per errore allo stato "attivo".
 - **Divieti mezzi pesanti** (`/restrizioni`): due sezioni distinte —
   divieti **ricorrenti** per giorno della settimana (es. "Centro storico Bergamo,
   lun-ven 8-20") che compaiono come avviso nel calendario, e blocchi di
@@ -159,9 +175,10 @@ Dettagli campo per campo nei commenti di `src/services/firestore.js`.
   vanno tenuti aggiornati a mano quando cambia un'ordinanza.
 - **Mezzo e scadenze** (`/scadenze`): anagrafica del camion (portata, misure
   cassone), **caricamento di libretto, e di una copia per ogni scadenza**
-  (assicurazione, bollo, revisioni — PDF o foto, salvati su Cloudinary) e le
-  4 scadenze richieste con relativo costo; badge di stato (verde/ambra/rosso)
-  in base a quanti giorni mancano.
+  (assicurazione, bollo, revisione mezzo, revisione gru, **revisione
+  cronotachigrafo** — PDF o foto, salvati su Cloudinary) e le 5 scadenze
+  richieste con relativo costo; badge di stato (verde/ambra/rosso) in base a
+  quanti giorni mancano.
 - **Ottimizza percorso** (`/percorso`): per una data scelta, prende tutte le
   consegne/ritiri pianificati e calcola l'ordine di tappe che minimizza i km
   totali, rispettando la portata e il volume del cassone (motore VROOM via ORS).
@@ -170,12 +187,10 @@ Dettagli campo per campo nei commenti di `src/services/firestore.js`.
   automatico gira una volta al giorno lato server e invia un'email quando una
   scadenza raggiunge una di quelle soglie — nessuna app aperta necessaria.
   Pulsante "Invia email di prova" per verificare la configurazione.
-- **Cruscotto** (`/`): riepilogo scadenze urgenti e prossimi impegni.
 
 ## Prossimi passi possibili (da valutare insieme)
 
 - Autenticazione (login con email/ufficio) prima di esporre l'URL pubblicamente.
 - Storico chilometraggio del mezzo (non solo l'ultimo valore).
-- Stato "completata" sulle consegne con conferma e note di consegna.
 - Esportazione/fattura PDF del costo di trasporto calcolato.
 - Gestione multi-mezzo se in futuro si aggiunge un secondo camion.
