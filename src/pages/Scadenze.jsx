@@ -3,7 +3,7 @@ import { ascoltaMezzo, salvaMezzo } from '../services/firestore'
 import { ETICHETTE_SCADENZE, formattaData, statoScadenza } from '../utils/dateUtils'
 import { caricaDocumento } from '../services/documenti'
 
-const CHIAVI_SCADENZE = ['assicurazione', 'bollo', 'revisione_mezzo', 'revisione_gru']
+const CHIAVI_SCADENZE = ['assicurazione', 'bollo', 'revisione_mezzo', 'revisione_gru', 'revisione_cronotachigrafo']
 
 const vuoto = {
   targa: '', modello: '', portata_kg: '', cassone_lunghezza_m: '', cassone_larghezza_m: '',

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import MappaConsegna from '../components/MappaConsegna'
-import { ascoltaClienti, creaConsegna, aggiornaConsegna, eliminaConsegna, leggiConsegna, leggiMezzo } from '../services/firestore'
+import { ascoltaClienti, ascoltaFornitori, creaConsegna, aggiornaConsegna, eliminaConsegna, leggiConsegna, leggiMezzo } from '../services/firestore'
 import { calcolaPercorsoConTappe, geocodifica } from '../services/routing'
 import { calcolaCostoTrasporto } from '../utils/costCalc'
 import { caricaDocumento } from '../services/documenti'
@@ -9,7 +9,7 @@ import { caricaDocumento } from '../services/documenti'
 const DEPOSITO_INDIRIZZO = import.meta.env.VITE_INDIRIZZO_DEPOSITO
 
 const vuoto = {
-  tipo: 'consegna', cliente: '', indirizzo: '', data: '', oraInizio: '08:00', oraFine: '09:00',
+  tipo: 'consegna', cliente: '', telefono: '', indirizzo: '', data: '', oraInizio: '08:00', oraFine: '09:00',
   descrizioneMerce: '', peso_kg: '', volume_m3: '', costoAlKm: '', costoFisso: '', note: '',
 }
 
@@ -20,7 +20,8 @@ export default function ConsegnaForm() {
 
   const [form, setForm] = useState(vuoto)
   const [clienti, setClienti] = useState([])
-  const [clienteSelezionato, setClienteSelezionato] = useState('')
+  const [fornitori, setFornitori] = useState([])
+  const [anagraficaSelezionata, setAnagraficaSelezionata] = useState('')
   const [destinazioneSelezionata, setDestinazioneSelezionata] = useState('')
   const [mezzo, setMezzo] = useState(null)
 
@@ -30,6 +31,7 @@ export default function ConsegnaForm() {
   const [coordCache, setCoordCache] = useState(null) // { indirizzo, coord } salvata scegliendo una destinazione da anagrafica
   const [tappe, setTappe] = useState([])
   const [calcolo, setCalcolo] = useState(null)
+  const [calcoloDaFonte, setCalcoloDaFonte] = useState(null) // 'salvato' | 'fresco' — solo per mostrare un avviso
 
   const [caricamento, setCaricamento] = useState(false)
   const [errore, setErrore] = useState(null)
@@ -41,14 +43,20 @@ export default function ConsegnaForm() {
   const [erroreFile, setErroreFile] = useState(null)
 
   useEffect(() => ascoltaClienti(setClienti), [])
+  useEffect(() => ascoltaFornitori(setFornitori), [])
   useEffect(() => { leggiMezzo().then(setMezzo) }, [])
+
+  // Il deposito è un punto fisso: lo geocodifichiamo una volta all'apertura della
+  // pagina, indipendentemente dal fatto che si stia calcolando un percorso — serve
+  // solo a mostrare il marker sulla mappa, non tocca mai il costo salvato.
+  useEffect(() => { geocodifica(DEPOSITO_INDIRIZZO).then(setDeposito).catch(() => {}) }, [])
 
   useEffect(() => {
     if (!modalitaModifica) return
     leggiConsegna(id).then((c) => {
       if (!c) return
       setForm({
-        tipo: c.tipo, cliente: c.cliente, indirizzo: c.indirizzo, data: c.data,
+        tipo: c.tipo, cliente: c.cliente, telefono: c.telefono || '', indirizzo: c.indirizzo, data: c.data || '',
         oraInizio: c.oraInizio, oraFine: c.oraFine,
         descrizioneMerce: c.merce?.descrizione || '', peso_kg: c.merce?.peso_kg ?? '',
         volume_m3: c.merce?.volume_m3 ?? '', costoAlKm: c.costoAlKm ?? '',
@@ -57,26 +65,49 @@ export default function ConsegnaForm() {
       setDestinazione(c.coord || null)
       setTappe(c.tappe || [])
       setDocumento(c.documento || null)
+      // Usiamo i valori già salvati così com'erano, senza richiamare il servizio di
+      // instradamento: aprire una consegna per modificarla (es. solo il telefono)
+      // non deve mai forzare un nuovo calcolo del percorso.
+      if (c.kmAndata != null) {
+        const costoGrezzo = c.costoTrasportoGrezzo || 0
+        setCalcolo({
+          km: c.kmAndata,
+          kmTotali: c.kmTotali,
+          costoGrezzo,
+          costoTrasporto: c.costoForzato ? Math.ceil(costoGrezzo / 5) * 5 : c.costoTrasporto,
+          geometria: null,
+          confiniLeg: null,
+        })
+        setCalcoloDaFonte('salvato')
+      }
     })
   }, [id, modalitaModifica])
 
-  const cliente = clienti.find((c) => c.id === clienteSelezionato)
-  const destinazioniCliente = cliente?.destinazioni || []
+  const listaAnagrafica = form.tipo === 'ritiro' ? fornitori : clienti
+  const etichettaAnagrafica = form.tipo === 'ritiro' ? 'Fornitore' : 'Cliente'
+  const anagraficaCorrente = listaAnagrafica.find((c) => c.id === anagraficaSelezionata)
+  const destinazioniAnagrafica = anagraficaCorrente?.destinazioni || []
 
   function campo(chiave, valore) {
     setForm((f) => ({ ...f, [chiave]: valore }))
   }
 
-  function selezionaCliente(idCliente) {
-    setClienteSelezionato(idCliente)
+  function cambiaTipo(nuovoTipo) {
+    campo('tipo', nuovoTipo)
+    setAnagraficaSelezionata('')
     setDestinazioneSelezionata('')
-    const c = clienti.find((x) => x.id === idCliente)
-    if (c) setForm((f) => ({ ...f, cliente: c.nome }))
+  }
+
+  function selezionaAnagrafica(idVoce) {
+    setAnagraficaSelezionata(idVoce)
+    setDestinazioneSelezionata('')
+    const voce = listaAnagrafica.find((x) => x.id === idVoce)
+    if (voce) setForm((f) => ({ ...f, cliente: voce.nome, telefono: voce.telefono || f.telefono }))
   }
 
   function selezionaDestinazione(idDestinazione) {
     setDestinazioneSelezionata(idDestinazione)
-    const dest = destinazioniCliente.find((d) => d.id === idDestinazione)
+    const dest = destinazioniAnagrafica.find((d) => d.id === idDestinazione)
     if (dest) {
       setForm((f) => ({ ...f, indirizzo: dest.indirizzo }))
       // La destinazione è già geocodificata in anagrafica: evitiamo di richiamare
@@ -85,18 +116,21 @@ export default function ConsegnaForm() {
     }
   }
 
-  // Geocodifica deposito e destinazione da zero (indirizzo cambiato o primo calcolo)
+  // Geocodifica (se serve) e calcola/ricalcola il percorso da zero, incluso il
+  // tracciato sulla mappa. Va richiamato esplicitamente, sia per il primo calcolo
+  // di un impegno nuovo sia per un ricalcolo volontario di uno già salvato.
   async function calcolaDaZero() {
     setErrore(null)
     setCaricamento(true)
     try {
-      const dep = await geocodifica(DEPOSITO_INDIRIZZO)
+      const dep = deposito || (await geocodifica(DEPOSITO_INDIRIZZO))
       const dest = coordCache && coordCache.indirizzo === form.indirizzo
         ? coordCache.coord
         : await geocodifica(form.indirizzo)
       setDeposito(dep)
       setDestinazione(dest)
       await ricalcola(dep, dest, tappe)
+      setCalcoloDaFonte('fresco')
     } catch (e) {
       setErrore(e.message)
     } finally {
@@ -115,6 +149,7 @@ export default function ConsegnaForm() {
       const { km, geometria, confiniLeg } = await calcolaPercorsoConTappe(punti, mezzo)
       const costo = calcolaCostoTrasporto(km, parseFloat(form.costoAlKm) || 0)
       setCalcolo({ geometria, confiniLeg, km, ...costo })
+      setCalcoloDaFonte('fresco')
     } catch (e) {
       setErrore(e.message)
     } finally {
@@ -122,9 +157,10 @@ export default function ConsegnaForm() {
     }
   }
 
-  // Ogni modifica al tracciato (aggiunta/spostamento/rimozione di una tappa,
-  // oppure trascinamento diretto della linea) ricalcola km e costo in automatico,
-  // come su Google Maps — non serve un pulsante "Ricalcola" separato.
+  // Modificare il tracciato sulla mappa (trascinare la linea, spostare/aggiungere
+  // una tappa) è un'azione esplicita dell'utente: in quel caso sì che ha senso
+  // ricalcolare km e costo in automatico, a differenza della semplice apertura
+  // del form per modificare un altro campo.
   function aggiornaTappe(nuoveTappe) {
     setTappe(nuoveTappe)
     ricalcola(deposito, destinazione, nuoveTappe)
@@ -148,17 +184,18 @@ export default function ConsegnaForm() {
   async function salva(e) {
     e.preventDefault()
     if (!calcolo || !destinazione) {
-      setErrore('Calcola prima il percorso e il costo.')
+      setErrore('Calcola prima il percorso e il costo (pulsante "Calcola km e costo").')
       return
     }
     const costoFissoNumero = form.costoFisso !== '' && !isNaN(parseFloat(form.costoFisso)) ? parseFloat(form.costoFisso) : null
     const dati = {
       tipo: form.tipo,
       cliente: form.cliente,
+      telefono: form.telefono,
       indirizzo: form.indirizzo,
       coord: { lat: destinazione.lat, lng: destinazione.lng },
       tappe,
-      data: form.data,
+      data: form.data || '',
       oraInizio: form.oraInizio,
       oraFine: form.oraFine,
       merce: {
@@ -194,36 +231,42 @@ export default function ConsegnaForm() {
       <form onSubmit={salva} className="card" style={{ display: 'grid', gap: 4 }}>
         <div className="campo">
           <label>Tipo</label>
-          <select value={form.tipo} onChange={(e) => campo('tipo', e.target.value)}>
+          <select value={form.tipo} onChange={(e) => cambiaTipo(e.target.value)}>
             <option value="consegna">Consegna al cliente</option>
-            <option value="ritiro">Ritiro per il magazzino</option>
+            <option value="ritiro">Ritiro dal fornitore</option>
           </select>
         </div>
 
-        {clienti.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: destinazioniCliente.length > 0 ? '1fr 1fr' : '1fr', gap: 16 }}>
+        {listaAnagrafica.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: destinazioniAnagrafica.length > 0 ? '1fr 1fr' : '1fr', gap: 16 }}>
             <div className="campo">
-              <label>Cliente da anagrafica (opzionale)</label>
-              <select value={clienteSelezionato} onChange={(e) => selezionaCliente(e.target.value)}>
+              <label>{etichettaAnagrafica} da anagrafica (opzionale)</label>
+              <select value={anagraficaSelezionata} onChange={(e) => selezionaAnagrafica(e.target.value)}>
                 <option value="">— scegli per compilare automaticamente —</option>
-                {clienti.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                {listaAnagrafica.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
               </select>
             </div>
-            {destinazioniCliente.length > 0 && (
+            {destinazioniAnagrafica.length > 0 && (
               <div className="campo">
                 <label>Destinazione</label>
                 <select value={destinazioneSelezionata} onChange={(e) => selezionaDestinazione(e.target.value)}>
                   <option value="">— scegli indirizzo —</option>
-                  {destinazioniCliente.map((d) => <option key={d.id} value={d.id}>{d.etichetta || d.indirizzo}</option>)}
+                  {destinazioniAnagrafica.map((d) => <option key={d.id} value={d.id}>{d.etichetta || d.indirizzo}</option>)}
                 </select>
               </div>
             )}
           </div>
         )}
 
-        <div className="campo">
-          <label>Cliente</label>
-          <input value={form.cliente} onChange={(e) => campo('cliente', e.target.value)} required />
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+          <div className="campo">
+            <label>{etichettaAnagrafica}</label>
+            <input value={form.cliente} onChange={(e) => campo('cliente', e.target.value)} required />
+          </div>
+          <div className="campo">
+            <label>Telefono <span style={{ fontWeight: 400, textTransform: 'none' }}>(per contatti spot, se non in anagrafica)</span></label>
+            <input value={form.telefono} onChange={(e) => campo('telefono', e.target.value)} placeholder="Es. 333 1234567" />
+          </div>
         </div>
 
         <div className="campo">
@@ -234,8 +277,8 @@ export default function ConsegnaForm() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
           <div className="campo">
-            <label>Data</label>
-            <input type="date" value={form.data} onChange={(e) => campo('data', e.target.value)} required />
+            <label>Data <span style={{ fontWeight: 400, textTransform: 'none' }}>(opzionale, se non ancora concordata)</span></label>
+            <input type="date" value={form.data} onChange={(e) => campo('data', e.target.value)} />
           </div>
           <div className="campo">
             <label>Ora inizio</label>
@@ -280,7 +323,7 @@ export default function ConsegnaForm() {
           </div>
           <div className="campo">
             <label>Costo al km (€)</label>
-            <input type="number" min="0" step="0.01" value={form.costoAlKm} onChange={(e) => { campo('costoAlKm', e.target.value); setCalcolo(null) }} />
+            <input type="number" min="0" step="0.01" value={form.costoAlKm} onChange={(e) => campo('costoAlKm', e.target.value)} />
           </div>
         </div>
 
@@ -299,10 +342,15 @@ export default function ConsegnaForm() {
           <textarea rows={2} value={form.note} onChange={(e) => campo('note', e.target.value)} />
         </div>
 
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           <button type="button" className="btn-secondario" onClick={calcolaDaZero} disabled={!form.indirizzo || caricamento}>
-            {caricamento ? 'Calcolo in corso…' : 'Calcola km e costo'}
+            {caricamento ? 'Calcolo in corso…' : calcolo ? 'Ricalcola percorso e costo' : 'Calcola km e costo'}
           </button>
+          {calcoloDaFonte === 'salvato' && (
+            <span style={{ fontSize: 12, color: 'var(--nebbia-400)' }}>
+              Km e costo mostrati sono quelli già salvati — premi qui solo se vuoi ricalcolarli davvero.
+            </span>
+          )}
         </div>
 
         {errore && <p style={{ color: 'var(--rosso-scadenza)' }}>{errore}</p>}
@@ -318,6 +366,11 @@ export default function ConsegnaForm() {
               confiniLeg={calcolo?.confiniLeg}
               modificabile
             />
+            {!calcolo?.geometria && (
+              <p style={{ fontSize: 12, color: 'var(--nebbia-400)', marginTop: 6 }}>
+                Il tracciato sulla mappa comparirà dopo un ricalcolo — i dati numerici qui sotto restano comunque validi.
+              </p>
+            )}
             {caricamento && <p style={{ fontSize: 12, color: 'var(--nebbia-400)' }}>Ricalcolo percorso…</p>}
             {calcolo && (
               <div className="card" style={{ marginTop: 12 }}>

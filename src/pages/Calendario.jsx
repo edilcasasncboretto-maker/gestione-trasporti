@@ -7,7 +7,7 @@ import getDay from 'date-fns/getDay'
 import { it } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { useNavigate } from 'react-router-dom'
-import { ascoltaConsegne, ascoltaRestrizioni, ascoltaIndisponibilita, eliminaConsegna, eliminaIndisponibilita } from '../services/firestore'
+import { ascoltaConsegne, ascoltaRestrizioni, ascoltaIndisponibilita, eliminaConsegna, aggiornaConsegna, eliminaIndisponibilita } from '../services/firestore'
 import { formattaEuro } from '../utils/dateUtils'
 
 const localizer = dateFnsLocalizer({
@@ -33,11 +33,13 @@ export default function Calendario() {
   }, [])
 
   const eventi = useMemo(() => {
-    const eventiConsegne = consegne.map((c) => {
-      const inizio = new Date(`${c.data}T${c.oraInizio || '08:00'}`)
-      const fine = new Date(`${c.data}T${c.oraFine || '09:00'}`)
-      return { id: c.id, title: `${c.tipo === 'ritiro' ? 'Ritiro' : 'Consegna'} — ${c.cliente}`, start: inizio, end: fine, tipo: 'consegna', risorsa: c }
-    })
+    const eventiConsegne = consegne
+      .filter((c) => c.data && c.stato !== 'annullata' && c.stato !== 'completata')
+      .map((c) => {
+        const inizio = new Date(`${c.data}T${c.oraInizio || '08:00'}`)
+        const fine = new Date(`${c.data}T${c.oraFine || '09:00'}`)
+        return { id: c.id, title: `${c.tipo === 'ritiro' ? 'Ritiro' : 'Consegna'} — ${c.cliente}`, start: inizio, end: fine, tipo: 'consegna', risorsa: c }
+      })
     const eventiBlocchi = indisponibilita.map((i) => {
       const inizio = new Date(`${i.dataInizio}T${i.oraInizio || '00:00'}`)
       const fine = new Date(`${i.dataFine || i.dataInizio}T${i.oraFine || '23:59'}`)
@@ -45,6 +47,11 @@ export default function Calendario() {
     })
     return [...eventiConsegne, ...eventiBlocchi]
   }, [consegne, indisponibilita])
+
+  const senzaData = useMemo(
+    () => consegne.filter((c) => !c.data && c.stato !== 'annullata' && c.stato !== 'completata'),
+    [consegne]
+  )
 
   function restrizioniAttiveNelGiorno(dataISO) {
     if (!dataISO) return []
@@ -59,6 +66,11 @@ export default function Calendario() {
       await eliminaConsegna(idConsegna)
       setSelezionata(null)
     }
+  }
+
+  async function segnaEseguita(idConsegna) {
+    await aggiornaConsegna(idConsegna, { stato: 'completata' })
+    setSelezionata(null)
   }
 
   async function eliminaBlocco(id) {
@@ -91,6 +103,18 @@ export default function Calendario() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {senzaData.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h2>Senza data ancora concordata</h2>
+          {senzaData.map((c) => (
+            <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--nebbia-200)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>{c.tipo === 'ritiro' ? 'Ritiro da' : 'Consegna a'} {c.cliente} ({c.indirizzo})</span>
+              <button className="btn-secondario" onClick={() => navigate(`/modifica-consegna/${c.id}`)}>Apri</button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -139,6 +163,7 @@ export default function Calendario() {
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-primario" onClick={() => navigate(`/modifica-consegna/${selezionata.id}`)}>Modifica</button>
+            <button className="btn-segnale" onClick={() => segnaEseguita(selezionata.id)}>Segna come eseguita</button>
             <button className="btn-secondario" style={{ color: 'var(--rosso-scadenza)' }} onClick={() => elimina(selezionata.id)}>Elimina</button>
             <button className="btn-secondario" onClick={() => setSelezionata(null)}>Chiudi</button>
           </div>
