@@ -15,6 +15,12 @@ function ColonnaImpegni({ titolo, colore, elementi, aperto, setAperto, navigate,
             <div>
               <strong>{c.data ? formattaData(c.data) : 'Data da definire'}</strong> — {c.cliente}
               {c.costoTrasporto != null && <span className="numero" style={{ marginLeft: 10 }}>{formattaEuro(c.costoTrasporto)}</span>}
+              {c.documento?.url && (
+                <a href={c.documento.url} target="_blank" rel="noreferrer" style={{ marginLeft: 10 }}
+                  onClick={(e) => e.stopPropagation()} title={c.documento.nome}>
+                  📎 allegato
+                </a>
+              )}
             </div>
             <span style={{ color: 'var(--nebbia-400)', fontSize: 12 }}>{aperto === c.id ? '▲ chiudi' : '▼ dettagli'}</span>
           </div>

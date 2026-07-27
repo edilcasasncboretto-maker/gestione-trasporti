@@ -166,12 +166,13 @@ export default function ConsegnaForm() {
     ricalcola(deposito, destinazione, nuoveTappe)
   }
 
-  async function caricaFileMerce() {
-    if (!fileScelto) return
+  async function caricaFileMerce(fileDaCaricare) {
+    const file = fileDaCaricare || fileScelto
+    if (!file) return
     setErroreFile(null)
     setCaricamentoFile(true)
     try {
-      const doc = await caricaDocumento(fileScelto, 'consegne')
+      const doc = await caricaDocumento(file, 'consegne')
       setDocumento(doc)
       setFileScelto(null)
     } catch (e) {
@@ -183,6 +184,10 @@ export default function ConsegnaForm() {
 
   async function salva(e) {
     e.preventDefault()
+    if (caricamentoFile) {
+      setErrore('Attendi che il caricamento del documento sia completato prima di salvare.')
+      return
+    }
     if (!calcolo || !destinazione) {
       setErrore('Calcola prima il percorso e il costo (pulsante "Calcola km e costo").')
       return
@@ -297,17 +302,19 @@ export default function ConsegnaForm() {
 
         <div className="campo">
           <label>Documento merce (PDF, bolla, ordine...)</label>
-          {documento?.url && (
+          {documento?.url && !caricamentoFile && (
             <p style={{ fontSize: 12, margin: '0 0 6px' }}>
               📎 <a href={documento.url} target="_blank" rel="noreferrer">{documento.nome}</a>
             </p>
           )}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ flex: 1 }}
-              onChange={(e) => setFileScelto(e.target.files?.[0] || null)} />
-            <button type="button" className="btn-secondario" onClick={caricaFileMerce} disabled={!fileScelto || caricamentoFile}>
-              {caricamentoFile ? 'Caricamento…' : documento?.url ? 'Sostituisci' : 'Carica'}
-            </button>
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null
+                setFileScelto(file)
+                if (file) caricaFileMerce(file)
+              }} />
+            {caricamentoFile && <span style={{ fontSize: 12, color: 'var(--nebbia-400)' }}>Caricamento in corso…</span>}
           </div>
           {erroreFile && <p style={{ color: 'var(--rosso-scadenza)', fontSize: 12 }}>{erroreFile}</p>}
         </div>
@@ -390,7 +397,9 @@ export default function ConsegnaForm() {
         )}
 
         <div style={{ display: 'flex', gap: 12 }}>
-          <button type="submit" className="btn-primario">{modalitaModifica ? 'Salva modifiche' : 'Salva impegno'}</button>
+          <button type="submit" className="btn-primario" disabled={caricamentoFile}>
+            {caricamentoFile ? 'Attendi il caricamento…' : modalitaModifica ? 'Salva modifiche' : 'Salva impegno'}
+          </button>
           {modalitaModifica && (
             <button type="button" className="btn-secondario" style={{ color: 'var(--rosso-scadenza)' }} onClick={elimina}>
               Elimina impegno
